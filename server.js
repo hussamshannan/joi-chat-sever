@@ -181,7 +181,12 @@ io.on("connection", (socket) => {
     });
   });
 
- 
+  socket.on("answered", (data) => {
+    socket.to(data.roomId).emit("answered", {
+      isAnswer: data.isAnswer,
+      to: data.to,
+    });
+  });
   // Handle WebRTC signaling for audio calls
   socket.on("audio-offer", (data) => {
     socket.to(data.roomId).emit("audio-offer", {
