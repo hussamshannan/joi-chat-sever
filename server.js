@@ -173,6 +173,7 @@ io.on("connection", (socket) => {
     });
 
     // Notify the user who ended the call
+
     socket.emit("audio-call-ended", {
       userId: socket.id,
       endedBy: "me", // For the user who ended, it's "me"
@@ -180,11 +181,7 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("answered", (data) => {
-    socket.to(data.roomId).emit("answered", {
-      isAnswer: data.isAnswer,
-    });
-  });
+ 
   // Handle WebRTC signaling for audio calls
   socket.on("audio-offer", (data) => {
     socket.to(data.roomId).emit("audio-offer", {
