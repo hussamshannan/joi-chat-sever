@@ -186,6 +186,10 @@ io.on("connection", (socket) => {
       isAnswer: data.isAnswer,
       to: data.to,
     });
+    socket.emit("answered", {
+      isAnswer: data.isAnswer,
+      to: data.to,
+    });
   });
   // Handle WebRTC signaling for audio calls
   socket.on("audio-offer", (data) => {
