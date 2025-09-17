@@ -3,7 +3,7 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
-
+var x;
 const app = express();
 app.use(
   cors({
@@ -74,8 +74,8 @@ io.on("connection", (socket) => {
     console.log(`User ${socket.id} joined room: ${roomId}`);
     console.log(`Room ${roomId} now has ${userCount} users`);
   });
-
   // In the server.js file, update the send-message handler
+
   socket.on("send-message", (data) => {
     console.log("Message received from", socket.id, ":", data);
 
@@ -180,6 +180,11 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on("answered", (data) => {
+    socket.to(data.roomId).emit("answered", {
+      isAnswer: data.isAnswer,
+    });
+  });
   // Handle WebRTC signaling for audio calls
   socket.on("audio-offer", (data) => {
     socket.to(data.roomId).emit("audio-offer", {
