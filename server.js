@@ -206,6 +206,17 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on("set-background", (data) => {
+    console.log("Setting background for room:", data.roomId);
+
+    // Broadcast to all other users in the room
+    socket.to(data.roomId).emit("set-background", {
+      imageUrl: data.imageUrl,
+      imageName: data.imageName,
+      setBy: socket.id,
+    });
+  });
+
   socket.on("ice-candidate", (data) => {
     socket.to(data.roomId).emit("ice-candidate", {
       candidate: data.candidate,
