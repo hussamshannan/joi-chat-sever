@@ -124,6 +124,17 @@ io.on("connection", (socket) => {
       }
     }
   });
+  // Add this to your server (server.js)
+  socket.on("edit-message", (data) => {
+    console.log("Editing message:", data.messageId);
+
+    // Broadcast the edited message to all users in the room
+    socket.to(data.roomId).emit("message-edited", {
+      messageId: data.messageId,
+      newText: data.newText,
+      timestamp: new Date().toISOString(),
+    });
+  });
   socket.on("disconnect", (reason) => {
     console.log("User disconnected:", socket.id, "Reason:", reason);
 
