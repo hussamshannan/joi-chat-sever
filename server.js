@@ -247,6 +247,16 @@ io.on("connection", (socket) => {
       emoji: data.emoji,
     });
   });
+  // Update server to handle the new reaction format
+  socket.on("update-reactions", (data) => {
+    console.log("Reactions updated:", data.reactions);
+
+    // Broadcast to all users in the room
+    socket.to(data.roomId).emit("reactions-updated", {
+      messageId: data.messageId,
+      reactions: data.reactions,
+    });
+  });
   socket.on("ice-candidate", (data) => {
     socket.to(data.roomId).emit("ice-candidate", {
       candidate: data.candidate,
