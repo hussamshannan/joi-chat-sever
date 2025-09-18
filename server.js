@@ -227,7 +227,26 @@ io.on("connection", (socket) => {
       setBy: socket.id,
     });
   });
+  // Add these to your server
+  socket.on("message-reaction", (data) => {
+    console.log("Reaction received:", data.emoji);
 
+    // Broadcast to all users in the room
+    socket.to(data.roomId).emit("message-reaction", {
+      messageId: data.messageId,
+      emoji: data.emoji,
+    });
+  });
+
+  socket.on("remove-reaction", (data) => {
+    console.log("Reaction removal received:", data.emoji);
+
+    // Broadcast to all users in the room
+    socket.to(data.roomId).emit("remove-reaction", {
+      messageId: data.messageId,
+      emoji: data.emoji,
+    });
+  });
   socket.on("ice-candidate", (data) => {
     socket.to(data.roomId).emit("ice-candidate", {
       candidate: data.candidate,
