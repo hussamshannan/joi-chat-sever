@@ -247,6 +247,21 @@ io.on("connection", (socket) => {
       emoji: data.emoji,
     });
   });
+  
+  socket.on("typing-start", (data) => {
+    // Broadcast to other users in the room
+    socket.to(data.roomId).emit("user-typing-start", {
+      userId: socket.id,
+      userName: "User", // You might want to track usernames
+    });
+  });
+
+  socket.on("typing-stop", (data) => {
+    // Broadcast to other users in the room
+    socket.to(data.roomId).emit("user-typing-stop", {
+      userId: socket.id,
+    });
+  });
   // Update server to handle the new reaction format
   socket.on("update-reactions", (data) => {
     console.log("Reactions updated:", data.reactions);
