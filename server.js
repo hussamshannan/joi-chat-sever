@@ -263,10 +263,19 @@ io.on("connection", (socket) => {
     });
   });
 
-  // Server-side (Socket.io) - Add these event handlers
-  socket.on("send-image", async (data, callback) => {
+  // Handle image messages - FIXED VERSION
+  socket.on("send-image", (data, callback) => {
     try {
       const { roomId, imageData, fileName, fileSize, mimeType } = data;
+
+      // Validate required fields
+      if (!roomId || !imageData) {
+        callback({
+          success: false,
+          error: "Missing required fields",
+        });
+        return;
+      }
 
       // Validate file size (max 10MB)
       if (fileSize > 10 * 1024 * 1024) {
@@ -283,6 +292,7 @@ io.on("connection", (socket) => {
         "image/png",
         "image/gif",
         "image/webp",
+        "image/jpg", // Added jpg alias
       ];
       if (!allowedTypes.includes(mimeType)) {
         callback({
@@ -292,21 +302,38 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Broadcast to other users in the room
-      socket.to(roomId).emit("image-message", {
+      // Create message data
+      const imageMessage = {
         id: uuidv4(),
         imageData,
-        fileName,
+        fileName: fileName || "image",
         fileSize,
         mimeType,
         timestamp: new Date().toISOString(),
         sender: socket.id,
-      });
+        isImage: true,
+      };
 
-      callback({ success: true });
+      // Broadcast to other users in the room
+      socket.to(roomId).emit("image-message", imageMessage);
+
+      // Send success callback
+      if (callback) {
+        callback({
+          success: true,
+          messageId: imageMessage.id,
+        });
+      }
+
+      console.log(`Image sent by ${socket.id} to room ${roomId}`);
     } catch (error) {
       console.error("Error handling image:", error);
-      callback({ success: false, error: "Failed to send image" });
+      if (callback) {
+        callback({
+          success: false,
+          error: "Failed to send image",
+        });
+      }
     }
   });
   // Update server to handle the new reaction format
