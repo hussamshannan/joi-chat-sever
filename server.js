@@ -337,6 +337,7 @@ io.on("connection", (socket) => {
       }
     }
   });
+  // jhgj
   // Update server to handle the new reaction format
   socket.on("update-reactions", (data) => {
     console.log("Reactions updated:", data.reactions);
