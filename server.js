@@ -35,7 +35,6 @@ const io = new Server(server, {
 
 // Store room data
 const rooms = new Map();
-const activeImageTransfers = new Map();
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
@@ -96,6 +95,22 @@ io.on("connection", (socket) => {
       socket.emit("error", "You are not in a room. Please join a room first.");
     }
   });
+  socket.on("send-image", (data) => {
+
+    if (socket.roomId) {
+      // Broadcast to everyone in the room except the sender
+      socket.to(socket.roomId).emit("receive-image", {
+        id: data.id, // Include the message ID
+        imgData: data,
+        timestamp: data.timestamp,
+        sender: socket.id,
+      });
+    } else {
+      console.log("User not in a room, cannot send message");
+      socket.emit("error", "You are not in a room. Please join a room first.");
+    }
+  });
+  
   socket.on("message-read", (data) => {
     console.log("Message read receipt received from", socket.id, ":", data);
 
@@ -138,27 +153,27 @@ io.on("connection", (socket) => {
       timestamp: new Date().toISOString(),
     });
   });
-  // socket.on("disconnect", (reason) => {
-  //   console.log("User disconnected:", socket.id, "Reason:", reason);
+  socket.on("disconnect", (reason) => {
+    console.log("User disconnected:", socket.id, "Reason:", reason);
 
-  //   if (socket.roomId && rooms.has(socket.roomId)) {
-  //     // Remove user from room
-  //     rooms.get(socket.roomId).users.delete(socket.id);
+    if (socket.roomId && rooms.has(socket.roomId)) {
+      // Remove user from room
+      rooms.get(socket.roomId).users.delete(socket.id);
 
-  //     // Notify others in the room
-  //     socket.to(socket.roomId).emit("user-disconnected", socket.id);
+      // Notify others in the room
+      socket.to(socket.roomId).emit("user-disconnected", socket.id);
 
-  //     console.log(`User ${socket.id} removed from room: ${socket.roomId}`);
-  //     const userCount = rooms.get(socket.roomId).users.size;
-  //     console.log(`Room ${socket.roomId} now has ${userCount} users`);
+      console.log(`User ${socket.id} removed from room: ${socket.roomId}`);
+      const userCount = rooms.get(socket.roomId).users.size;
+      console.log(`Room ${socket.roomId} now has ${userCount} users`);
 
-  //     // Clean up empty rooms
-  //     if (userCount === 0) {
-  //       rooms.delete(socket.roomId);
-  //       console.log(`Room ${socket.roomId} deleted (empty)`);
-  //     }
-  //   }
-  // });
+      // Clean up empty rooms
+      if (userCount === 0) {
+        rooms.delete(socket.roomId);
+        console.log(`Room ${socket.roomId} deleted (empty)`);
+      }
+    }
+  });
   // Handle audio call start
   socket.on("audio-call-start", (data) => {
     console.log("Audio call started in room:", data.roomId);
@@ -266,182 +281,10 @@ io.on("connection", (socket) => {
     });
   });
 
-  // Enhanced image message handler
-  socket.on("send-image", (data, callback) => {
-    try {
-      const { roomId, imageData, fileName, fileSize, mimeType, messageId } =
-        data;
+ socket.on("send-image-binary", (data) => {
 
-      // Validate required fields
-      if (!roomId || !imageData) {
-        callback({
-          success: false,
-          error: "Missing required fields",
-        });
-        return;
-      }
-
-      // Check if user is in the room
-      if (!rooms.has(roomId) || !rooms.get(roomId).users.has(socket.id)) {
-        callback({
-          success: false,
-          error: "You are not in the room or the room does not exist",
-        });
-        return;
-      }
-
-      // Validate file size (max 10MB)
-      if (fileSize > 10 * 1024 * 1024) {
-        callback({
-          success: false,
-          error: "File too large. Maximum size is 10MB.",
-        });
-        return;
-      }
-
-      // Validate MIME type
-      const allowedTypes = [
-        "image/jpeg",
-        "image/png",
-        "image/gif",
-        "image/webp",
-        "image/jpg",
-      ];
-      if (!allowedTypes.includes(mimeType)) {
-        callback({
-          success: false,
-          error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP.",
-        });
-        return;
-      }
-
-      // Check for duplicate transfers
-      const transferKey = `${socket.id}-${messageId}`;
-      if (activeImageTransfers.has(transferKey)) {
-        callback({
-          success: false,
-          error: "Duplicate image transfer detected",
-        });
-        return;
-      }
-
-      // Mark transfer as active
-      activeImageTransfers.set(transferKey, {
-        timestamp: Date.now(),
-        roomId,
-        fileName,
-      });
-
-      // Cleanup function for transfer
-      const cleanupTransfer = () => {
-        activeImageTransfers.delete(transferKey);
-      };
-
-      // Create message data
-      const imageMessage = {
-        id: messageId || uuidv4(),
-        imageData,
-        fileName: fileName || "image",
-        fileSize,
-        mimeType,
-        timestamp: new Date().toISOString(),
-        sender: socket.id,
-        isImage: true,
-      };
-
-      // Broadcast to other users in the room with error handling
-      const otherUsers = Array.from(rooms.get(roomId).users).filter(
-        (id) => id !== socket.id
-      );
-      let deliveredCount = 0;
-      const totalRecipients = otherUsers.length;
-
-      if (totalRecipients === 0) {
-        // No other users in room, still success
-        callback({
-          success: true,
-          messageId: imageMessage.id,
-          deliveredTo: 0,
-        });
-        cleanupTransfer();
-        return;
-      }
-
-      // Track delivery with timeout
-      const deliveryTimeout = setTimeout(() => {
-        callback({
-          success: true,
-          messageId: imageMessage.id,
-          deliveredTo: deliveredCount,
-          warning: "Some users may not have received the image",
-        });
-        cleanupTransfer();
-      }, 5000);
-
-      // Emit to each user individually to track delivery
-      otherUsers.forEach((userId) => {
-        const userSocket = io.sockets.sockets.get(userId);
-        if (userSocket && userSocket.connected) {
-          userSocket.emit("image-message", imageMessage, (deliveryAck) => {
-            deliveredCount++;
-
-            // If all recipients have acknowledged, respond immediately
-            if (deliveredCount === totalRecipients) {
-              clearTimeout(deliveryTimeout);
-              callback({
-                success: true,
-                messageId: imageMessage.id,
-                deliveredTo: deliveredCount,
-              });
-              cleanupTransfer();
-            }
-          });
-        }
-      });
-
-      // Also emit to room for standard handling
-      socket.to(roomId).emit("image-message", imageMessage);
-
-      console.log(
-        `Image sent by ${socket.id} to room ${roomId}, recipients: ${totalRecipients}`
-      );
-    } catch (error) {
-      console.error("Error handling image:", error);
-      if (callback) {
-        callback({
-          success: false,
-          error: "Internal server error",
-        });
-      }
-    }
-  });
-
-  // Add cleanup for active transfers
-  socket.on("disconnect", (reason) => {
-    console.log("User disconnected:", socket.id, "Reason:", reason);
-
-    // Clean up active image transfers for this socket
-    for (const [key, transfer] of activeImageTransfers.entries()) {
-      if (key.startsWith(socket.id)) {
-        activeImageTransfers.delete(key);
-      }
-    }
-
-    // ... rest of your disconnect handler
-  });
-
-  // Periodic cleanup of stale transfers
-  // setInterval(() => {
-  //   const now = Date.now();
-  //   const staleThreshold = 5 * 60 * 1000; // 5 minutes
-
-  //   for (const [key, transfer] of activeImageTransfers.entries()) {
-  //     if (now - transfer.timestamp > staleThreshold) {
-  //       activeImageTransfers.delete(key);
-  //       console.log(`Cleaned up stale image transfer: ${key}`);
-  //     }
-  //   }
-  // }, 10 * 60 * 1000); // Run every 10 minutes
+   socket.broadcast.emit("receive-image-binary", data);
+ });
   // Update server to handle the new reaction format
   socket.on("update-reactions", (data) => {
     console.log("Reactions updated:", data.reactions);
