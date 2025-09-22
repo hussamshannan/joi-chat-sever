@@ -155,9 +155,6 @@ io.on("connection", (socket) => {
         console.log(`Room ${socket.roomId} deleted (empty)`);
       }
     }
-     if (socket.imageChunks) {
-       socket.imageChunks.clear();
-     }
   });
   // Handle audio call start
   socket.on("audio-call-start", (data) => {
@@ -267,107 +264,78 @@ io.on("connection", (socket) => {
   });
 
   // Handle image messages - FIXED VERSION
-  // Server-side - Updated socket handler
-  socket.on("send-image", async (data, callback) => {
+  socket.on("send-image", (data, callback) => {
     try {
-      const {
-        roomId,
-        imageData,
-        fileName,
-        fileSize,
-        mimeType,
-        chunkIndex,
-        totalChunks,
-        messageId,
-      } = data;
+      const { roomId, imageData, fileName, fileSize, mimeType } = data;
 
-      // Validate required fields for initial chunk
-      if (
-        chunkIndex === 0 &&
-        (!roomId || !imageData || totalChunks === undefined)
-      ) {
+      // Validate required fields
+      if (!roomId || !imageData) {
         callback({
           success: false,
-          error: "Missing required fields for image transfer",
+          error: "Missing required fields",
         });
         return;
       }
 
-      // Store chunks in memory (for production, use Redis or database)
-      if (!socket.imageChunks) {
-        socket.imageChunks = new Map();
+      // Validate file size (max 10MB)
+      if (fileSize > 10 * 1024 * 1024) {
+        callback({
+          success: false,
+          error: "File too large. Maximum size is 10MB.",
+        });
+        return;
       }
 
-      // Store the chunk
-      if (!socket.imageChunks.has(messageId)) {
-        socket.imageChunks.set(messageId, {
-          chunks: [],
-          totalChunks: totalChunks,
-          fileName: fileName,
-          fileSize: fileSize,
-          mimeType: mimeType,
-          roomId: roomId,
-          receivedChunks: 0,
+      // Validate MIME type
+      const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/jpg", // Added jpg alias
+      ];
+      if (!allowedTypes.includes(mimeType)) {
+        callback({
+          success: false,
+          error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP.",
         });
+        return;
       }
 
-      const imageDataObj = socket.imageChunks.get(messageId);
-      imageDataObj.chunks[chunkIndex] = imageData;
-      imageDataObj.receivedChunks++;
+      // Create message data
+      const imageMessage = {
+        id: uuidv4(),
+        imageData,
+        fileName: fileName || "image",
+        fileSize,
+        mimeType,
+        timestamp: new Date().toISOString(),
+        sender: socket.id,
+        isImage: true,
+      };
 
-      // If all chunks received, reconstruct and broadcast
-      if (imageDataObj.receivedChunks === totalChunks) {
-        // Reconstruct the image
-        const fullImageData = imageDataObj.chunks.join("");
+      // Broadcast to other users in the room
+      socket.to(roomId).emit("image-message", imageMessage);
 
-        // Validate the reconstructed image
-        if (fullImageData.length > 10 * 1024 * 1024) {
-          socket.imageChunks.delete(messageId);
-          callback({
-            success: false,
-            error: "Reconstructed image too large",
-          });
-          return;
-        }
-
-        // Broadcast to other users
-        socket.to(roomId).emit("image-message", {
-          id: messageId,
-          imageData: fullImageData,
-          fileName: imageDataObj.fileName,
-          fileSize: imageDataObj.fileSize,
-          mimeType: imageDataObj.mimeType,
-          timestamp: new Date().toISOString(),
-          sender: socket.id,
-        });
-
-        // Clean up
-        socket.imageChunks.delete(messageId);
-
+      // Send success callback
+      if (callback) {
         callback({
           success: true,
-          messageId: messageId,
-          chunkReceived: true,
-          chunksRemaining: 0,
-        });
-      } else {
-        // Acknowledge chunk receipt
-        callback({
-          success: true,
-          chunkReceived: true,
-          chunksRemaining: totalChunks - imageDataObj.receivedChunks,
+          messageId: imageMessage.id,
         });
       }
+
+      console.log(`Image sent by ${socket.id} to room ${roomId}`);
     } catch (error) {
-      console.error("Error handling image chunk:", error);
-      callback({
-        success: false,
-        error: "Failed to process image chunk",
-      });
+      console.error("Error handling image:", error);
+      if (callback) {
+        callback({
+          success: false,
+          error: "Failed to send image",
+        });
+      }
     }
   });
-
-
   // Update server to handle the new reaction format
   socket.on("update-reactions", (data) => {
     console.log("Reactions updated:", data.reactions);
