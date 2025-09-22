@@ -31,16 +31,17 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
     credentials: true,
   },
+  maxHttpBufferSize: 1e8, // 100MB max file size
 });
 
 // Store room data
 const rooms = new Map();
 
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
+  // console.log("User connected:", socket.id);
 
   socket.on("join-room", (roomId) => {
-    console.log(`User ${socket.id} joining room: ${roomId}`);
+    // console.log(`User ${socket.id} joining room: ${roomId}`);
 
     // Leave any previous rooms
     const previousRooms = Array.from(socket.rooms).filter(
@@ -48,7 +49,7 @@ io.on("connection", (socket) => {
     );
     for (const room of previousRooms) {
       socket.leave(room);
-      console.log(`User ${socket.id} left room: ${room}`);
+      // console.log(`User ${socket.id} left room: ${room}`);
     }
 
     // Join new room
@@ -60,7 +61,7 @@ io.on("connection", (socket) => {
       rooms.set(roomId, {
         users: new Set(),
       });
-      console.log(`Created new room: ${roomId}`);
+      // console.log(`Created new room: ${roomId}`);
     }
 
     // Add user to room
@@ -73,8 +74,8 @@ io.on("connection", (socket) => {
     const userCount = rooms.get(roomId).users.size;
     socket.emit("room-joined", { roomId, userCount });
 
-    console.log(`User ${socket.id} joined room: ${roomId}`);
-    console.log(`Room ${roomId} now has ${userCount} users`);
+    // console.log(`User ${socket.id} joined room: ${roomId}`);
+    // console.log(`Room ${roomId} now has ${userCount} users`);
   });
   // In the server.js file, update the send-message handler
 
@@ -95,13 +96,14 @@ io.on("connection", (socket) => {
       socket.emit("error", "You are not in a room. Please join a room first.");
     }
   });
-  socket.on("send-image", (data) => {
-
+  socket.on("image", (data) => {
+    console.log(data);
     if (socket.roomId) {
       // Broadcast to everyone in the room except the sender
       socket.to(socket.roomId).emit("receive-image", {
         id: data.id, // Include the message ID
         imgData: data,
+        isMe: false,
         timestamp: data.timestamp,
         sender: socket.id,
       });
@@ -110,9 +112,9 @@ io.on("connection", (socket) => {
       socket.emit("error", "You are not in a room. Please join a room first.");
     }
   });
-  
+
   socket.on("message-read", (data) => {
-    console.log("Message read receipt received from", socket.id, ":", data);
+    // console.log("Message read receipt received from", socket.id, ":", data);
 
     if (socket.roomId && rooms.has(socket.roomId)) {
       const room = rooms.get(socket.roomId);
@@ -125,7 +127,7 @@ io.on("connection", (socket) => {
         otherUsers.forEach((userId) => {
           const userSocket = io.sockets.sockets.get(userId);
           if (userSocket) {
-            console.log("Sending read receipt to user:", userId);
+            // console.log("Sending read receipt to user:", userId);
             userSocket.emit("message-read", {
               messageId: data.messageId,
               timestamp: data.timestamp,
@@ -154,7 +156,7 @@ io.on("connection", (socket) => {
     });
   });
   socket.on("disconnect", (reason) => {
-    console.log("User disconnected:", socket.id, "Reason:", reason);
+    // console.log("User disconnected:", socket.id, "Reason:", reason);
 
     if (socket.roomId && rooms.has(socket.roomId)) {
       // Remove user from room
@@ -163,14 +165,14 @@ io.on("connection", (socket) => {
       // Notify others in the room
       socket.to(socket.roomId).emit("user-disconnected", socket.id);
 
-      console.log(`User ${socket.id} removed from room: ${socket.roomId}`);
+      // console.log(`User ${socket.id} removed from room: ${socket.roomId}`);
       const userCount = rooms.get(socket.roomId).users.size;
-      console.log(`Room ${socket.roomId} now has ${userCount} users`);
+      // console.log(`Room ${socket.roomId} now has ${userCount} users`);
 
       // Clean up empty rooms
       if (userCount === 0) {
         rooms.delete(socket.roomId);
-        console.log(`Room ${socket.roomId} deleted (empty)`);
+        // console.log(`Room ${socket.roomId} deleted (empty)`);
       }
     }
   });
@@ -281,10 +283,9 @@ io.on("connection", (socket) => {
     });
   });
 
- socket.on("send-image-binary", (data) => {
-
-   socket.broadcast.emit("receive-image-binary", data);
- });
+  socket.on("send-image-binary", (data) => {
+    socket.broadcast.emit("receive-image-binary", data);
+  });
   // Update server to handle the new reaction format
   socket.on("update-reactions", (data) => {
     console.log("Reactions updated:", data.reactions);
