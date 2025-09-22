@@ -263,8 +263,8 @@ io.on("connection", (socket) => {
     });
   });
 
-  // Handle image messages - FIXED VERSION
-  socket.on("send-image", (data, callback) => {
+   // Handle image messages - FIXED VERSION
+  socket.on('send-image', (data, callback) => {
     try {
       const { roomId, imageData, fileName, fileSize, mimeType } = data;
 
@@ -272,7 +272,7 @@ io.on("connection", (socket) => {
       if (!roomId || !imageData) {
         callback({
           success: false,
-          error: "Missing required fields",
+          error: "Missing required fields"
         });
         return;
       }
@@ -292,7 +292,7 @@ io.on("connection", (socket) => {
         "image/png",
         "image/gif",
         "image/webp",
-        "image/jpg", // Added jpg alias
+        "image/jpg" // Added jpg alias
       ];
       if (!allowedTypes.includes(mimeType)) {
         callback({
@@ -306,12 +306,12 @@ io.on("connection", (socket) => {
       const imageMessage = {
         id: uuidv4(),
         imageData,
-        fileName: fileName || "image",
+        fileName: fileName || 'image',
         fileSize,
         mimeType,
         timestamp: new Date().toISOString(),
         sender: socket.id,
-        isImage: true,
+        isImage: true
       };
 
       // Broadcast to other users in the room
@@ -319,19 +319,20 @@ io.on("connection", (socket) => {
 
       // Send success callback
       if (callback) {
-        callback({
-          success: true,
-          messageId: imageMessage.id,
+        callback({ 
+          success: true, 
+          messageId: imageMessage.id 
         });
       }
 
       console.log(`Image sent by ${socket.id} to room ${roomId}`);
+
     } catch (error) {
       console.error("Error handling image:", error);
       if (callback) {
-        callback({
-          success: false,
-          error: "Failed to send image",
+        callback({ 
+          success: false, 
+          error: "Failed to send image" 
         });
       }
     }
