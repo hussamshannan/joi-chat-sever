@@ -247,7 +247,7 @@ io.on("connection", (socket) => {
       emoji: data.emoji,
     });
   });
-  
+
   socket.on("typing-start", (data) => {
     // Broadcast to other users in the room
     socket.to(data.roomId).emit("user-typing-start", {
@@ -261,6 +261,53 @@ io.on("connection", (socket) => {
     socket.to(data.roomId).emit("user-typing-stop", {
       userId: socket.id,
     });
+  });
+
+  // Server-side (Socket.io) - Add these event handlers
+  socket.on("send-image", async (data, callback) => {
+    try {
+      const { roomId, imageData, fileName, fileSize, mimeType } = data;
+
+      // Validate file size (max 10MB)
+      if (fileSize > 10 * 1024 * 1024) {
+        callback({
+          success: false,
+          error: "File too large. Maximum size is 10MB.",
+        });
+        return;
+      }
+
+      // Validate MIME type
+      const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+      ];
+      if (!allowedTypes.includes(mimeType)) {
+        callback({
+          success: false,
+          error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP.",
+        });
+        return;
+      }
+
+      // Broadcast to other users in the room
+      socket.to(roomId).emit("image-message", {
+        id: uuidv4(),
+        imageData,
+        fileName,
+        fileSize,
+        mimeType,
+        timestamp: new Date().toISOString(),
+        sender: socket.id,
+      });
+
+      callback({ success: true });
+    } catch (error) {
+      console.error("Error handling image:", error);
+      callback({ success: false, error: "Failed to send image" });
+    }
   });
   // Update server to handle the new reaction format
   socket.on("update-reactions", (data) => {
